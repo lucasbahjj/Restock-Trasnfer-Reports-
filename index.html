@@ -1,0 +1,1899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Restack">
+<meta name="theme-color" content="#1c1c1a">
+<title>Restack Report Builder</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --paper:#f2efe6;
+    --ink:#1c1c1a;
+    --tag-yellow:#ffff00;
+    --tag-yellow-soft:#fdf3b3;
+    --tag-green:#3f7d4f;
+    --line:#c9c3ae;
+    --danger:#b3402f;
+  }
+  *{box-sizing:border-box;}
+  button, .btn, label.btn{
+    -webkit-user-select:none;
+    user-select:none;
+    -webkit-touch-callout:none;
+    touch-action:manipulation;
+  }
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Courier New', ui-monospace, monospace;
+    -webkit-font-smoothing:antialiased;
+  }
+  header{
+    position:relative;
+    background:var(--ink);
+    color:var(--paper);
+    padding:18px 16px 14px;
+    position:sticky; top:0; z-index:10;
+    border-bottom:6px solid var(--tag-yellow);
+  }
+  header h1{
+    margin:0;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size:1.35rem;
+    letter-spacing:0.5px;
+  }
+  header p{
+    margin:4px 0 0;
+    font-size:0.72rem;
+    opacity:0.75;
+    text-transform:uppercase;
+    letter-spacing:1.5px;
+  }
+  main{ max-width:1000px; margin:0 auto; padding:16px; }
+
+  .card{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:14px;
+    margin-bottom:16px;
+    box-shadow:2px 2px 0 var(--line);
+  }
+  .card h2{
+    margin:0 0 10px;
+    font-family:Georgia, serif;
+    font-size:1rem;
+    border-bottom:2px solid var(--ink);
+    padding-bottom:6px;
+  }
+  .field-row{
+    display:flex;
+    gap:12px;
+    flex-wrap:wrap;
+    align-items:flex-end;
+  }
+  .field{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  .field label{
+    font-size:0.65rem;
+    text-transform:uppercase;
+    letter-spacing:1px;
+    color:#555;
+  }
+  .field input{
+    font-family:inherit;
+    font-size:0.9rem;
+    padding:8px;
+    border:1px solid var(--ink);
+    border-radius:2px;
+    background:#fffdf0;
+  }
+  label.btn, button{
+    font-family:inherit;
+    font-size:0.8rem;
+    font-weight:bold;
+    letter-spacing:0.5px;
+    text-transform:uppercase;
+    padding:11px 14px;
+    border:2px solid var(--ink);
+    background:var(--tag-yellow-soft);
+    color:var(--ink);
+    cursor:pointer;
+    border-radius:2px;
+    text-align:center;
+    transition:transform 0.1s ease;
+  }
+  label.btn:active, button:active{ transform:translate(1px,1px); }
+  button.secondary{ background:#fff; }
+  button.export{ background:var(--tag-green); color:#fff; border-color:var(--tag-green); }
+  button.danger-outline{
+    background:#fff; color:var(--danger); border-color:var(--danger);
+  }
+  button:disabled{ opacity:0.4; cursor:not-allowed; }
+  input[type=file]{ display:none; }
+
+  #preview{
+    margin-top:12px; max-width:100%; max-height:220px;
+    display:none; border:1px solid var(--line);
+  }
+  .status{ margin-top:10px; font-size:0.8rem; color:#555; display:none; }
+  .status.active{ display:block; }
+  progress{ width:100%; height:6px; accent-color:var(--tag-green); }
+  .raw-toggle{
+    margin-top:8px; font-size:0.72rem; color:#555;
+    cursor:pointer; text-decoration:underline; display:none;
+  }
+  .raw-toggle.active{ display:inline-block; }
+  #rawText{
+    display:none; white-space:pre-wrap; background:#fafafa;
+    border:1px solid var(--line); padding:10px;
+    font-size:0.72rem; margin-top:8px; max-height:140px; overflow-y:auto;
+  }
+
+  .transfer-block{
+    border:1px solid var(--line);
+    margin-bottom:14px;
+    background:#fff;
+  }
+  .drag-handle{
+    cursor:grab;
+    touch-action:none;           /* the page must not scroll while dragging */
+    -webkit-user-select:none;
+    user-select:none;
+    font-size:1.1rem;
+    padding:8px 12px;
+  }
+  .transfer-block.dragging{
+    opacity:0.6;
+    border:2px dashed var(--ink);
+  }
+  .transfer-block.flash{
+    animation: flashborder 1.2s ease;
+  }
+  @keyframes flashborder{
+    0%{ box-shadow: 0 0 0 4px var(--tag-yellow); }
+    100%{ box-shadow: 0 0 0 0 transparent; }
+  }
+  #errorBanner{
+    display:none;
+    position:fixed;
+    bottom:0; left:0; right:0;
+    background:var(--danger);
+    color:#fff;
+    padding:10px 14px;
+    font-size:0.75rem;
+    z-index:100;
+  }
+  #errorBanner button{
+    float:right;
+    padding:2px 8px;
+    font-size:0.7rem;
+    background:#fff;
+    color:var(--danger);
+    border-color:#fff;
+  }
+  .transfer-head{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    flex-wrap:wrap;
+    padding:8px 10px;
+    background:var(--tag-yellow);
+    border-bottom:2px solid var(--ink);
+  }
+  .transfer-head .field input{ background:#fff; }
+  .transfer-head .spacer{ flex:1; }
+  .table-wrap{ overflow-x:auto; }
+  table{ width:100%; border-collapse:collapse; font-size:0.75rem; min-width:820px; }
+  th, td{ border:1px solid var(--line); padding:5px; text-align:left; }
+  th{
+    background:var(--ink); color:var(--paper);
+    font-weight:normal; text-transform:uppercase;
+    font-size:0.6rem; letter-spacing:0.5px;
+  }
+  td input{
+    width:100%; border:none; background:transparent;
+    font-family:inherit; font-size:0.78rem; padding:2px;
+    min-width:60px;
+  }
+  td.narrow input{ min-width:36px; }
+  td input:focus{ outline:2px solid var(--tag-yellow); background:#fffbe0; }
+  .row-actions{ text-align:center; }
+  .row-actions button{
+    padding:3px 7px; font-size:0.68rem; border-width:1px;
+    background:#fff; color:var(--danger); border-color:var(--danger);
+  }
+  .transfer-foot{
+    display:flex; gap:8px; padding:8px 10px; flex-wrap:wrap;
+    border-top:1px solid var(--line);
+    align-items:center;
+  }
+  .qty-total{
+    margin-left:auto;
+    font-size:0.78rem;
+    font-weight:bold;
+  }
+  .actions-bar{
+    display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;
+  }
+  .hint{
+    font-size:0.72rem; color:#666; margin-top:8px; line-height:1.5;
+  }
+  .photo-strip{
+    display:flex;
+    gap:8px;
+    padding:8px 10px;
+    overflow-x:auto;
+    border-top:1px dashed var(--line);
+    background:#fbfaf4;
+  }
+  .photo-cell{
+    flex:0 0 auto;
+    width:84px;
+    border:1px solid var(--line);
+    background:#fff;
+  }
+  .photo-cell img{
+    width:100%;
+    height:60px;
+    object-fit:cover;
+    display:block;
+    cursor:pointer;
+  }
+  .photo-bar{
+    display:flex;
+  }
+  .photo-bar button{
+    flex:1;
+    padding:2px 0;
+    font-size:0.68rem;
+    border:none;
+    border-top:1px solid var(--line);
+    background:#fff;
+  }
+  .photo-bar button + button{
+    border-left:1px solid var(--line);
+    color:var(--danger);
+  }
+  .photo-modal{
+    position:fixed;
+    inset:0;
+    background:rgba(20,20,18,0.92);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    z-index:50;
+    padding:16px;
+  }
+  .photo-modal img{
+    max-width:100%;
+    max-height:85vh;
+    border:2px solid var(--paper);
+  }
+  .photo-modal button{
+    margin-top:12px;
+    background:var(--paper);
+  }
+  footer{
+    text-align:center; font-size:0.68rem; color:#888;
+    padding:20px 16px 40px; line-height:1.6;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="position:absolute;top:10px;right:12px">
+    <button id="langEn" class="secondary" style="padding:4px 10px;font-size:0.7rem">EN</button>
+    <button id="langEs" class="secondary" style="padding:4px 10px;font-size:0.7rem">ES</button>
+  </div>
+  <h1>RESTACK REPORT BUILDER</h1>
+  <p>Photo → Transfer Sections → Weekly Excel</p>
+</header>
+
+<main>
+
+  <!-- WEEK -->
+  <div class="card">
+    <h2>1 · Report Week</h2>
+    <div class="field-row">
+      <div class="field">
+        <label for="weekStart">Week start</label>
+        <input type="date" id="weekStart">
+      </div>
+      <div class="field">
+        <label for="weekEnd">Week end</label>
+        <input type="date" id="weekEnd">
+      </div>
+    </div>
+    <div class="hint">This becomes the section header when it's added to the big sheet (e.g. 06-22-2026 – 06-28-2026).</div>
+  </div>
+
+  <!-- PHOTO -->
+  <div class="card">
+    <h2>2 · Scan a Ticket (optional)</h2>
+    <div class="field-row">
+      <label class="btn" for="cameraInput">📷 Take Photo</label>
+      <input id="cameraInput" type="file" accept="image/*" capture="environment">
+      <label class="btn secondary" for="fileInput">📁 Upload Photo</label>
+      <input id="fileInput" type="file" accept="image/*">
+      <button id="testBtn" class="secondary">🔧 Test Scanner</button>
+      <button id="saveWorkBtn" class="secondary">💾 Save Work</button>
+      <label class="btn secondary" for="openWorkInput">📂 Open Work</label>
+      <input id="openWorkInput" type="file" accept=".restack,application/json" style="display:none">
+      <button id="resetBtn" class="secondary" style="border-color:var(--danger);color:var(--danger)">🗑 Reset</button>
+    </div>
+    <div class="hint" id="testResult" style="display:none"></div>
+    <img id="preview" alt="Captured document preview">
+    <div class="status" id="status">
+      <div id="statusText">Reading photo...</div>
+      <progress id="progressBar" value="0" max="1"></progress>
+    </div>
+    <span class="raw-toggle" id="rawToggle">show raw text detected</span>
+    <div id="rawText"></div>
+    <div class="hint">The photo is read by Claude AI, attached to the most recent transfer below, and the rows it finds are added as drafts — always double-check them against the paper before exporting. You can also skip this and type rows in by hand.</div>
+  </div>
+
+  <!-- TRANSFERS -->
+  <div class="card">
+    <h2>3 · Transfers This Week</h2>
+    <div id="transfers"></div>
+    <button id="addTransferBtn" class="secondary">+ Add Transfer</button>
+      <button id="sortBtn" class="secondary">⇅ Sort by arrival date</button>
+  </div>
+
+  <!-- EXPORT -->
+  <div class="card">
+    <h2>4 · Send to Excel</h2>
+    <div class="actions-bar">
+      <label class="btn secondary" for="masterInput">📂 Open Big Sheet (.xlsx)</label>
+      <input id="masterInput" type="file" accept=".xlsx,.xls">
+      <button id="openMasterDirectBtn" class="secondary" style="display:none">⚡ One-Click Mode: Open Big Sheet</button>
+      <button id="exportBtn" class="export">⬇ Add Week & Download</button>
+      <button id="copyTsvBtn" class="secondary">📋 Copy for Excel paste</button>
+      <button id="emailBtn" class="secondary">✉️ Email report</button>
+      <button id="shareXlsxBtn" class="secondary">📤 Share Excel file</button>
+      <button id="exportNewBtn" class="secondary">⬇ Download This Week Only</button>
+      <button id="savePhotosBtn" class="secondary">⬇ Save All Photos</button>
+    </div>
+    <div class="hint" id="masterStatus">No big sheet loaded — "Add Week &amp; Download" will create a fresh file. To append to your existing RESTACK BY TRANSFER sheet, open it first, then export. Your original file is never changed — a new updated copy downloads, and you email that.</div>
+    <div class="hint">Photos can't go inside the Excel file itself — use "Save All Photos" and attach them to the same email as backup proof.</div>
+  </div>
+
+  <div id="errorBanner"><button id="errorBannerClose">✕</button><span id="errorBannerText"></span></div>
+  <footer>
+    <strong>Use on any phone or computer, no app needed:</strong> save this file, then open it in any browser
+    (Safari, Chrome, anything). Photo reading, Excel export — everything works there.
+    On iPhone: open in Safari → Share → "Add to Home Screen" and it becomes its own app icon.<br><br>
+    Photos are read by AI when available, otherwise on this device. Excel files never leave your device.<br>
+    Column layout matches: PRODUCT · COUNTRY OF · LABEL · ORG · PO# · COO. · LOT · QTY X LOT · DATE
+  </footer>
+
+</main>
+
+<script>
+const COLS = ['product','country','label','org','po','coo','lot','qty','date'];
+const COL_HEADS = ['PRODUCT','Country of','LABEL','ORG','PO#','COO.','LOT','QTY X Lot','Date'];
+
+// ---------- COMMODITY DICTIONARY ----------
+// Canonical produce names with the codes/abbreviations that appear on papers.
+// Scanned product names get corrected to these (fuzzy match handles OCR garble).
+const COMMODITIES = [
+  ['French Beans', ['FRBE','FRENCHBEANS','FRENCHBEAN','FBEANS']],
+  ['Brussels Sprouts', ['BRUS','BRUSSELS','BRUSSEL','BRUSSELSPROUTS','SPROUTS']],
+  ['Asparagus', ['ASPA','ASP','ASPARAGUS']],
+  ['Blueberries', ['BLUE','BLUEB','BLUEBERRY','BLUEBERRIES','BB']],
+  ['Raspberries', ['RASP','RASPB','RASPBERRY','RASPBERRIES']],
+  ['Blackberries', ['BLAC','BLACK','BLKB','BLACKBERRY','BLACKBERRIES','BLACKB']],
+  ['Celery', ['CEL','CELERY']],
+  ['Mangoes', ['MANG','MANGO','MANGOES','MANGOS']],
+  ['Cut Mango', ['CUTMANGO','CUTMANG','MANGOCUT']],
+  ['Jackfruit', ['JACK','JACKFRUIT','JAKFRUIT']],
+  ['Cut Jackfruit', ['CUTJACK','CUTJACKFRUIT','JACKCUT']],
+  ['Strawberries', ['STRAW','STRAWB','STRAWBERRY','STRAWBERRIES']],
+  ['Snap Peas', ['SNAP','SNAPPEAS','SNAPPEA','SUGARSNAP']],
+  ['Snow Peas', ['SNOW','SNOWPEAS','SNOWPEA']],
+  ['Green Beans', ['GRBE','GREENBEANS','GREENBEAN']],
+  ['Broccoli', ['BROC','BROCCOLI']],
+  ['Cauliflower', ['CAULI','CAULIFLOWER']],
+  ['Cucumbers', ['CUC','CUCUMBER','CUCUMBERS','CUKES']],
+  ['Peppers', ['PEPP','PEPPER','PEPPERS','BELLPEPPER']],
+  ['Tomatoes', ['TOM','TOMATO','TOMATOES']],
+  ['Avocados', ['AVO','AVOCADO','AVOCADOS','HASS']],
+  ['Limes', ['LIME','LIMES']],
+  ['Lemons', ['LEMON','LEMONS']],
+  ['Pineapples', ['PINE','PINEAPPLE','PINEAPPLES']],
+  ['Papayas', ['PAPA','PAPAYA','PAPAYAS']],
+  ['Dragonfruit', ['DRAGON','DRAGONFRUIT','PITAYA']],
+  ['Grapes', ['GRAPE','GRAPES']],
+  ['Cherries', ['CHERRY','CHERRIES']],
+  ['Watermelon', ['WMELON','WATERMELON']],
+  ['Cantaloupe', ['CANT','CANTALOUPE']],
+  ['Honeydew', ['HDEW','HONEYDEW']],
+  ['Kale', ['KALE']],
+  ['Spinach', ['SPIN','SPINACH']],
+  ['Cilantro', ['CILANTRO','CIL']],
+  ['Corn', ['CORN','SWEETCORN']],
+  ['Squash', ['SQUASH']],
+  ['Zucchini', ['ZUCC','ZUCCHINI']],
+  ['Onions', ['ONION','ONIONS']],
+  ['Garlic', ['GARLIC']],
+  ['Ginger', ['GINGER']],
+  ['Okra', ['OKRA']],
+  ['Radishes', ['RADISH','RADISHES']],
+  ['Carrots', ['CARROT','CARROTS']]
+];
+
+function editDistance(a, b){
+  if(Math.abs(a.length - b.length) > 2) return 99;
+  const m = [];
+  for(let i = 0; i <= a.length; i++){ m[i] = [i]; }
+  for(let j = 0; j <= b.length; j++){ m[0][j] = j; }
+  for(let i = 1; i <= a.length; i++){
+    for(let j = 1; j <= b.length; j++){
+      m[i][j] = Math.min(m[i-1][j]+1, m[i][j-1]+1, m[i-1][j-1] + (a[i-1]===b[j-1]?0:1));
+    }
+  }
+  return m[a.length][b.length];
+}
+
+// "Alpine BRUS . 1LBSX18" → "Brussels Sprouts . 1LBSX18"
+// Same produce + same PO + same lot = ONE row with the quantities added together.
+function mergeScannedRows(rows){
+  const merged = [];
+  rows.forEach(r => {
+    const lotKey = (r.lot||'').toUpperCase().replace(/O/g,'0').replace(/([A-Z])8([A-Z])/g,'$1&$2');
+    const key = [ (r.product||'').toUpperCase(), (r.label||'').toUpperCase(), r.po||'', lotKey ].join('|');
+    const hit = merged.find(m => m.__key === key && key !== '||');
+    if(hit){
+      hit.qty = String((parseFloat(hit.qty)||0) + (parseFloat(r.qty)||1));
+      // keep any fields the duplicate had that the first was missing
+      COLS.forEach(c => { if(!hit[c] && r[c]) hit[c] = r[c]; });
+    } else {
+      r.__key = key;
+      if(!r.qty) r.qty = '1';
+      merged.push(r);
+    }
+  });
+  merged.forEach(m => delete m.__key);
+  return merged;
+}
+
+function repairSizeCode(size){
+  if(!size) return size;
+  let out = size.toUpperCase();
+  out = out.replace(/[O0]RYP[I1]NT/g,'DRYPINT');   // ORYPINT → DRYPINT
+  out = out.replace(/DRYP[I1]NT/g,'DRYPINT');
+  out = out.replace(/^([\d.]+)[O0]Z/,'$1OZ');      // 180Z → 18OZ
+  out = out.replace(/[I1]LB/g,'1LB').replace(/^1LB5/,'1LBS');
+  return out;
+}
+function normalizeProduct(raw){
+  if(!raw) return raw;
+  const parts = raw.split(/\s+\.\s+/); // split on ' . ' with spaces so 9.8OZX12 stays intact
+  let fullName = parts[0].trim();
+  let sizePart = parts.slice(1).join(' . ').trim();
+  if(!sizePart){
+    const words = fullName.split(/\s+/);
+    const lastWord = words[words.length-1];
+    if(words.length > 1 && /\d/.test(lastWord) && /(OZ|LB|LBS|CT|PT|PINT|KG|GN|X\d|BULK)/i.test(lastWord)){
+      sizePart = lastWord;
+      fullName = words.slice(0,-1).join(' ');
+    }
+  }
+  let namePart = fullName;
+  let extraWords = '';
+  // OCR often reads letters as digits — translate before matching (5→S, 0→O, 1→I...)
+  const key = namePart.toUpperCase()
+    .replace(/0/g,'O').replace(/1/g,'I').replace(/5/g,'S').replace(/8/g,'B')
+    .replace(/3/g,'E').replace(/4/g,'A').replace(/6/g,'G').replace(/7/g,'T').replace(/2/g,'Z')
+    .replace(/[^A-Z]/g,'');
+  if(!key) return raw;
+  let best = null, bestDist = 99;
+  // fuzzy tolerance scales with length; very short strings must match exactly
+  const maxDist = key.length >= 6 ? 2 : (key.length >= 4 ? 1 : 0);
+  for(const [canonical, aliases] of COMMODITIES){
+    for(const alias of [canonical.toUpperCase().replace(/[^A-Z]/g,''), ...aliases]){
+      if(key === alias){ best = canonical; bestDist = 0; break; }
+      if(maxDist > 0){
+        const d = editDistance(key, alias);
+        if(d <= maxDist && d < bestDist){ bestDist = d; best = canonical; }
+      }
+    }
+    if(bestDist === 0) break;
+  }
+  // second pass: multi-word names like "Organic BLUE Organic" — find the commodity in ANY word,
+  // put the real name first, keep leftover descriptor words once each
+  if(!best){
+    const words = fullName.split(/\s+/);
+    if(words.length > 1){
+      for(let wi = 0; wi < words.length; wi++){
+        const sub = normalizeProduct(words[wi]);
+        if(sub !== words[wi]){
+          best = sub;
+          const rest = [];
+          words.forEach((w, i) => {
+            if(i !== wi && !rest.some(r => r.toLowerCase() === w.toLowerCase())) rest.push(w);
+          });
+          extraWords = rest.length ? ' ' + rest.join(' ') : '';
+          break;
+        }
+      }
+    }
+  }
+  const name = (best || namePart) + extraWords;
+  const fixedSize = repairSizeCode(sizePart);
+  return fixedSize ? name + ' . ' + fixedSize : name;
+}
+
+let lang = 'en';
+const ES = {
+  'PHOTO → TRANSFER SECTIONS → WEEKLY EXCEL':'FOTO → SECCIONES DE TRANSFER → EXCEL SEMANAL',
+  '📷 Take Photo':'📷 Tomar Foto','📁 Upload Photo':'📁 Subir Foto',
+  '🔧 Test Scanner':'🔧 Probar Escáner','🗑 Reset':'🗑 Reiniciar',
+  '+ Row':'+ Fila','📷 Scan page':'📷 Escanear página',
+  '+ Add Transfer':'+ Agregar Transfer','⇅ Sort by arrival date':'⇅ Ordenar por fecha de llegada',
+  'Remove':'Eliminar','📂 Open Big Sheet (.xlsx)':'📂 Abrir Hoja Grande (.xlsx)',
+  '⚡ One-Click Mode: Open Big Sheet':'⚡ Modo Un-Clic: Abrir Hoja Grande',
+  '⬇ Add Week & Download':'⬇ Agregar Semana y Descargar',
+  '📄 Download This Week Only':'📄 Descargar Solo Esta Semana',
+  '📋 Copy for Excel paste':'📋 Copiar para pegar en Excel','✉️ Email report':'✉️ Enviar por correo',
+  '💾 Save All Photos':'💾 Guardar Todas las Fotos',
+  'Transfer Date':'Fecha del Transfer','Transfer #':'Transfer #',
+  'Week start':'Inicio de semana','Week end':'Fin de semana',
+  'Are you sure you want to reset the page? This deletes ALL transfers, rows, and photos you have entered. This cannot be undone.':
+    '¿Seguro que quieres reiniciar la página? Esto borra TODOS los transfers, filas y fotos. No se puede deshacer.',
+  'Remove this whole transfer section?':'¿Eliminar toda esta sección de transfer?',
+  '💾 Save Work':'💾 Guardar Trabajo','📂 Open Work':'📂 Abrir Trabajo',
+  'Set a password for this file (leave blank for no password):':'Pon una contraseña para este archivo (deja en blanco si no quieres):',
+  'This file is password-protected. Enter the password:':'Este archivo tiene contraseña. Escríbela:',
+  'Wrong password.':'Contraseña incorrecta.',
+  '✓ Work saved. Send this file to your other device (AirDrop, email, USB), then use 📂 Open Work there.':'✓ Trabajo guardado. Envía este archivo a tu otro dispositivo (AirDrop, correo, USB) y usa 📂 Abrir Trabajo allí.',
+  '✓ Work loaded — all transfers, rows, and photos are here.':'✓ Trabajo cargado — todos los transfers, filas y fotos están aquí.',
+  'Could not open that file — it does not look like a saved work file.':'No se pudo abrir el archivo — no parece un archivo de trabajo guardado.',
+  '📤 Share Excel file':'📤 Compartir archivo Excel',
+  '✓ Shared — the Excel file went out attached.':'✓ Compartido — el archivo Excel salió adjunto.',
+  'Sharing is not available in this browser — the Excel file downloaded instead. Attach it to your email.':'Compartir no está disponible en este navegador — el archivo Excel se descargó. Adjúntalo a tu correo.'
+};
+function tr(str){ return (lang==='es' && ES[str]) || str; }
+const I18N_STATIC = []; // [element, english] pairs collected on first pass
+function applyLang(){
+  if(!I18N_STATIC.length){
+    document.querySelectorAll('button, label.btn, .subtitle, .field-label').forEach(el => {
+      const txt = el.childNodes.length===1 && el.textContent.trim();
+      if(txt && (ES[txt] || Object.keys(ES).includes(txt))) I18N_STATIC.push([el, txt]);
+    });
+    // also catch known ids whose text matters
+    ['langEn','langEs'].forEach(()=>{});
+  }
+  I18N_STATIC.forEach(([el, en]) => { el.textContent = tr(en); });
+  document.getElementById('langEn').style.fontWeight = lang==='en' ? 'bold' : 'normal';
+  document.getElementById('langEs').style.fontWeight = lang==='es' ? 'bold' : 'normal';
+  render(); // re-render dynamic buttons (Remove, + Row, Scan page, arrows)
+}
+let transfers = [];
+let scanTargetIdx = null; // when set, the next photo scans INTO this transfer
+let masterWB = null;
+let masterHandle = null; // desktop Chrome/Edge: write updates straight back into the file
+let masterName = '';
+
+function todayStr(){
+  const d = new Date();
+  return `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`;
+}
+
+function newTransfer(){
+  return {
+    date: todayStr(),
+    number: '',
+    rows: [],
+    photos: []
+  };
+}
+
+function newRow(data = {}){
+  const base = {};
+  COLS.forEach(c => base[c] = '');
+  base.date = document.getElementById('transfers').dataset.lastDate || todayStr();
+  return { ...base, ...data };
+}
+
+function render(){
+  const wrap = document.getElementById('transfers');
+  wrap.innerHTML = '';
+  transfers.forEach((t, ti) => {
+    const block = document.createElement('div');
+    block.className = 'transfer-block';
+    block.dataset.ti = ti;
+
+    // head (built with DOM APIs so typed quotes can't break the page)
+    const head = document.createElement('div');
+    head.className = 'transfer-head';
+
+    const makeField = (labelText, key, placeholder) => {
+      const f = document.createElement('div');
+      f.className = 'field';
+      const lab = document.createElement('label');
+      lab.textContent = labelText;
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.value = t[key] || '';
+      inp.placeholder = placeholder;
+      inp.addEventListener('input', e => { transfers[ti][key] = e.target.value; });
+      f.appendChild(lab);
+      f.appendChild(inp);
+      return f;
+    };
+    head.appendChild(makeField('Transfer date','date','6/22/2026'));
+    head.appendChild(makeField('Transfer #','number','1119876'));
+    const spacer = document.createElement('div');
+    spacer.className = 'spacer';
+    head.appendChild(spacer);
+    const handle = document.createElement('span');
+    handle.className = 'drag-handle';
+    handle.textContent = '≡';
+    handle.title = 'Hold and drag to reorder';
+    handle.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      const startBlock = handle.closest('.transfer-block');
+      startBlock.classList.add('dragging');
+      handle.setPointerCapture && handle.setPointerCapture(e.pointerId);
+      const move = ev => {
+        const blocks = [...document.querySelectorAll('.transfer-block')];
+        for(const b of blocks){
+          if(b === startBlock) continue;
+          const r = b.getBoundingClientRect();
+          const mid = r.top + r.height/2;
+          if(ev.clientY < mid && b.previousElementSibling !== startBlock && blockBefore(b, startBlock)){
+            b.parentNode.insertBefore(startBlock, b);
+            break;
+          } else if(ev.clientY > mid && b.nextElementSibling !== startBlock && !blockBefore(b, startBlock)){
+            b.parentNode.insertBefore(startBlock, b.nextElementSibling);
+            break;
+          }
+        }
+      };
+      const upEv = () => {
+        document.removeEventListener('pointermove', move);
+        document.removeEventListener('pointerup', upEv);
+        document.removeEventListener('pointercancel', upEv);
+        startBlock.classList.remove('dragging');
+        // rebuild the transfers array from the visual order
+        const order = [...document.querySelectorAll('.transfer-block')].map(b => parseInt(b.dataset.ti));
+        transfers = order.map(i => transfers[i]);
+        const y = window.scrollY;
+        render();
+        window.scrollTo(0, y);
+      };
+      document.addEventListener('pointermove', move);
+      document.addEventListener('pointerup', upEv);
+      document.addEventListener('pointercancel', upEv);
+    });
+    head.appendChild(handle);
+    const up = document.createElement('button');
+    up.className = 'secondary';
+    up.style.minWidth = '44px';
+    up.style.minHeight = '38px';
+    up.textContent = '▲';
+    up.title = 'Move this transfer up';
+    up.disabled = ti === 0;
+    up.addEventListener('click', e => {
+      e.preventDefault();
+      const y = window.scrollY;
+      [transfers[ti-1], transfers[ti]] = [transfers[ti], transfers[ti-1]];
+      render();
+      window.scrollTo(0, y);
+    });
+    head.appendChild(up);
+    const down = document.createElement('button');
+    down.className = 'secondary';
+    down.style.minWidth = '44px';
+    down.style.minHeight = '38px';
+    down.textContent = '▼';
+    down.title = 'Move this transfer down';
+    down.disabled = ti === transfers.length - 1;
+    down.addEventListener('click', e => {
+      e.preventDefault();
+      const y = window.scrollY;
+      [transfers[ti+1], transfers[ti]] = [transfers[ti], transfers[ti+1]];
+      render();
+      window.scrollTo(0, y);
+    });
+    head.appendChild(down);
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'danger-outline';
+    removeBtn.textContent = tr('Remove');
+    removeBtn.addEventListener('click', () => {
+      if(transfers[ti].rows.length && !confirm(tr('Remove this whole transfer section?'))) return;
+      transfers.splice(ti,1);
+      render();
+    });
+    head.appendChild(removeBtn);
+    block.appendChild(head);
+
+    // table
+    const twrap = document.createElement('div');
+    twrap.className = 'table-wrap';
+    const table = document.createElement('table');
+    const thead = document.createElement('thead');
+    thead.innerHTML = '<tr>' + COL_HEADS.map(h => `<th>${h}</th>`).join('') + '<th></th></tr>';
+    table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+
+    t.rows.forEach((row, ri) => {
+      const tr = document.createElement('tr');
+      COLS.forEach(c => {
+        const td = document.createElement('td');
+        if(['country','label','org','coo','qty'].includes(c)) td.className = 'narrow';
+        const input = document.createElement('input');
+        input.value = row[c] || '';
+        input.addEventListener('input', e => {
+          transfers[ti].rows[ri][c] = e.target.value;
+          if(c === 'qty') updateTotal(ti);
+        });
+        td.appendChild(input);
+        tr.appendChild(td);
+      });
+      const act = document.createElement('td');
+      act.className = 'row-actions';
+      const del = document.createElement('button');
+      del.textContent = '✕';
+      del.addEventListener('click', () => {
+        transfers[ti].rows.splice(ri,1);
+        render();
+      });
+      act.appendChild(del);
+      tr.appendChild(act);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    twrap.appendChild(table);
+    block.appendChild(twrap);
+
+    // photo strip
+    if(t.photos && t.photos.length){
+      const strip = document.createElement('div');
+      strip.className = 'photo-strip';
+      t.photos.forEach((p, pi) => {
+        const cell = document.createElement('div');
+        cell.className = 'photo-cell';
+        const img = document.createElement('img');
+        img.src = p.dataUrl;
+        img.alt = p.name;
+        img.title = 'Tap to view full size';
+        img.addEventListener('click', () => showPhotoModal(p));
+        cell.appendChild(img);
+        const bar = document.createElement('div');
+        bar.className = 'photo-bar';
+        const save = document.createElement('button');
+        save.textContent = '⬇';
+        save.title = 'Save photo';
+        save.addEventListener('click', () => downloadPhoto(p));
+        const rm = document.createElement('button');
+        rm.textContent = '✕';
+        rm.title = 'Remove photo';
+        rm.addEventListener('click', () => {
+          transfers[ti].photos.splice(pi,1);
+          render();
+        });
+        bar.appendChild(save);
+        bar.appendChild(rm);
+        cell.appendChild(bar);
+        strip.appendChild(cell);
+      });
+      block.appendChild(strip);
+    }
+
+    // foot
+    const foot = document.createElement('div');
+    foot.className = 'transfer-foot';
+    const addBtn = document.createElement('button');
+    addBtn.className = 'secondary';
+    addBtn.textContent = tr('+ Row');
+    addBtn.addEventListener('click', () => {
+      transfers[ti].rows.push(newRow({date: t.date}));
+      render();
+    });
+    foot.appendChild(addBtn);
+    const scanPage = document.createElement('button');
+    scanPage.className = 'secondary';
+    scanPage.textContent = tr('📷 Scan page');
+    scanPage.title = 'Scan another page of this same paper into this transfer';
+    scanPage.style.marginLeft = '8px';
+    scanPage.addEventListener('click', () => {
+      scanTargetIdx = ti;
+      document.getElementById('fileInput').click();
+    });
+    foot.appendChild(scanPage);
+    const total = document.createElement('div');
+    total.className = 'qty-total';
+    total.id = `total-${ti}`;
+    foot.appendChild(total);
+    block.appendChild(foot);
+
+    wrap.appendChild(block);
+    updateTotal(ti);
+  });
+}
+
+function updateTotal(ti){
+  const el = document.getElementById(`total-${ti}`);
+  if(!el) return;
+  const sum = transfers[ti].rows.reduce((s,r) => s + (parseFloat(r.qty)||0), 0);
+  el.textContent = sum ? `Total pallets/lots: ${sum}` : '';
+}
+
+document.getElementById('addTransferBtn').addEventListener('click', () => {
+  const t = newTransfer();
+  t.rows.push(newRow({date:t.date}));
+  transfers.push(t);
+  render();
+  // make the result visible: scroll to the new block and flash it
+  const blocks = document.querySelectorAll('.transfer-block');
+  const newest = blocks[blocks.length - 1];
+  if(newest){
+    newest.scrollIntoView({ behavior:'smooth', block:'center' });
+    newest.classList.add('flash');
+    setTimeout(() => newest.classList.remove('flash'), 1200);
+  }
+});
+
+// ---------- OCR ----------
+const statusBox = document.getElementById('status');
+const statusText = document.getElementById('statusText');
+const progressBar = document.getElementById('progressBar');
+const rawToggle = document.getElementById('rawToggle');
+const rawText = document.getElementById('rawText');
+const preview = document.getElementById('preview');
+
+function fileToDataUrl(file){
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(new Error('Could not read photo'));
+    r.readAsDataURL(file);
+  });
+}
+
+// Shrinks any photo (including iPhone HEIC and huge 12MP shots) into a
+// reasonably-sized JPEG the AI can accept. Falls back to the original
+// if the browser can't process it.
+async function compressImage(file, maxEdge = 1600, quality = 0.85){
+  const originalDataUrl = await fileToDataUrl(file);
+  try{
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error('Could not decode image'));
+      i.src = originalDataUrl;
+    });
+    const jpeg = drawToJpeg(img, maxEdge, quality);
+    if(jpeg && jpeg.startsWith('data:image/jpeg')){
+      return { dataUrl: jpeg, mediaType: 'image/jpeg', img };
+    }
+    throw new Error('canvas produced no jpeg');
+  } catch(e){
+    console.warn('Compression failed, using original photo:', e);
+    const fallbackType = (file.type && file.type.startsWith('image/')) ? file.type : 'image/jpeg';
+    return { dataUrl: originalDataUrl, mediaType: fallbackType, img: null };
+  }
+}
+
+function drawToJpeg(img, maxEdge, quality){
+  const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+  const w = Math.max(1, Math.round(img.width * scale));
+  const h = Math.max(1, Math.round(img.height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, w, h);
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
+// Some phone apps reject large request payloads outright, so the version
+// sent to the AI must fit a strict budget (~200k characters of base64).
+function fitToBudget(compressed, budget = 200000){
+  if(!compressed.img || compressed.dataUrl.length <= budget) return compressed.dataUrl;
+  const steps = [
+    [1400,0.8],[1200,0.75],[1100,0.7],[1000,0.6],[900,0.55],[800,0.5],[700,0.45]
+  ];
+  for(const [edge,q] of steps){
+    try{
+      const attempt = drawToJpeg(compressed.img, edge, q);
+      if(attempt && attempt.length <= budget) return attempt;
+    } catch(e){ break; }
+  }
+  // last resort: smallest attempt even if over budget
+  try{ return drawToJpeg(compressed.img, 700, 0.4); } catch(e){ return compressed.dataUrl; }
+}
+
+function showPhotoModal(p){
+  const modal = document.createElement('div');
+  modal.className = 'photo-modal';
+  const img = document.createElement('img');
+  img.src = p.dataUrl;
+  img.alt = p.name;
+  const close = document.createElement('button');
+  close.textContent = 'Close';
+  const closeIt = () => modal.remove();
+  close.addEventListener('click', closeIt);
+  modal.addEventListener('click', e => { if(e.target === modal) closeIt(); });
+  modal.appendChild(img);
+  modal.appendChild(close);
+  document.body.appendChild(modal);
+}
+
+function downloadPhoto(p){
+  const a = document.createElement('a');
+  a.href = p.dataUrl;
+  a.download = p.name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+// ---------- FALLBACK: on-device OCR (no API, no account) ----------
+// Used automatically when the Claude AI service isn't reachable, e.g. when
+// this file is opened directly in a normal browser outside Claude.
+let tesseractLoading = null;
+const TESSERACT_SOURCES = [
+  'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',
+  'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js'
+];
+function withTimeout(promise, ms, label){
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(label + ' timed out')), ms))
+  ]);
+}
+function loadScriptOnce(url){
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = url;
+    s.onload = () => resolve();
+    s.onerror = () => { s.remove(); reject(new Error('blocked: ' + url)); };
+    document.head.appendChild(s);
+  });
+}
+function loadTesseract(){
+  if(window.Tesseract) return Promise.resolve();
+  if(tesseractLoading) return tesseractLoading;
+  tesseractLoading = (async () => {
+    for(const url of TESSERACT_SOURCES){
+      try{ await withTimeout(loadScriptOnce(url), 15000, 'reader download'); if(window.Tesseract) return; }
+      catch(e){ console.warn(e.message); }
+    }
+    tesseractLoading = null;
+    throw new Error('offline reader unavailable');
+  })();
+  return tesseractLoading;
+}
+
+// text parser for the on-device reader (tuned to the restack sheet format)
+let lastRejectedCount = 0;
+function findReceivedDate(text){
+  const m = text.match(/rec[ei]{2}ved[^0-9]{0,40}(\d{1,2}\/\d{1,2}\/\d{2,4})/i);
+  return m ? m[1] : null;
+}
+function parseOcrText(text){
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const parsed = [];
+  const dateRegex = /(\d{1,2}\/\d{1,2}\/\d{2,4})/;
+  const LABEL_SET = /^(BAG|STD|MED|SM|LGE|JBO|XL)$/i;
+  const ORG_SET = /^(HIP|ALP|PC|SB|TJ|SBC|PUB)$/i;
+
+  const COUNTRY_WORDS = { MEXICO:'MX', PERU:'PE', CHILE:'CL', GUATEMALA:'GT', USA:'US', COLOMBIA:'CO', ARGENTINA:'AR', ECUADOR:'EC', HONDURAS:'HN', NICARAGUA:'NI', BRAZIL:'BR', CANADA:'CA', SPAIN:'ES', MOROCCO:'MA', 'COSTA RICA':'CR', 'DOMINICAN REPUBLIC':'DO' };
+  const COUNTRY_CODES = /^(MX|US|CA|PE|CL|GT|CO|AR|EC|HN|NI|BR|ES|MA|CR|DO)$/i;
+  const BRAND_ORGS = { ALPINE:'ALP', HIPPIE:'HIP', SB:'SB', PC:'PC', TJ:'TJ' };
+  let pendingProduct = '';
+  let pendingCountry = '';
+  let pendingOrg = '';
+  let pendingLabel = '';
+  let lastRowDate = '';
+
+  lines.forEach(line => {
+    // Shipping Detail style: "92000 / 9206952" or "92304 / AX0007" — PO slash Lot
+    const poLot = line.match(/(\d{5})\s*\/\s*((?=[A-Z0-9&]*\d)[A-Z0-9&]{5,8})/i);
+
+    // product section header: a line with a country word and no PO/Lot,
+    // e.g. "Purchase Commodity FRBE . 1LBX10 . . Snipped Mexico"
+    // or   "Alpine BRUS . 1LBSX18 . . Bag Mexico"
+    if(!poLot){
+      let countryHit = '';
+      let countryToken = '';
+      Object.keys(COUNTRY_WORDS).forEach(w => {
+        if(new RegExp('\\b'+w+'\\b','i').test(line)) countryHit = COUNTRY_WORDS[w];
+      });
+      if(!countryHit){
+        // fuzzy: "Mex1co" → MEXICO (digit translation + 1 typo allowed)
+        line.split(/\s+/).forEach(tok => {
+          if(countryHit || tok.length < 4) return;
+          const key = tok.toUpperCase()
+            .replace(/0/g,'O').replace(/1/g,'I').replace(/5/g,'S').replace(/8/g,'B')
+            .replace(/3/g,'E').replace(/4/g,'A').replace(/6/g,'G').replace(/7/g,'T').replace(/2/g,'Z')
+            .replace(/[^A-Z]/g,'');
+          Object.keys(COUNTRY_WORDS).forEach(w => {
+            if(!countryHit && Math.abs(key.length-w.length)<=1 && editDistance(key, w) <= 1){
+              countryHit = COUNTRY_WORDS[w];
+              countryToken = tok;
+            }
+          });
+        });
+      }
+      const looksLikeProduct =
+        /\d+\s*(OZ|LB|LBS|CT|PT|PINT|KG|GN)/i.test(line) || /BULK|X\s?\d+/i.test(line) ||
+        COMMODITIES.some(([name, aliases]) =>
+          new RegExp('\\b(' + [name.split(' ')[0], ...aliases].join('|') + ')\\b','i').test(line));
+      if(looksLikeProduct && !/\b\d{5}\b/.test(line)){
+        let rest = line;
+        pendingCountry = countryHit;
+        pendingOrg = '';
+        pendingLabel = '';
+        Object.keys(COUNTRY_WORDS).forEach(w => { rest = rest.replace(new RegExp('\\b'+w+'\\b','ig'),' '); });
+        if(countryToken) rest = rest.split(/\s+/).filter(t => t !== countryToken).join(' ');
+        Object.keys(BRAND_ORGS).forEach(b => {
+          const re = new RegExp('\\b'+b+'\\b','i');
+          if(re.test(rest)){ pendingOrg = BRAND_ORGS[b]; rest = rest.replace(re,' '); }
+        });
+        if(/\bbag\b/i.test(rest)){ pendingLabel = 'BAG'; rest = rest.replace(/\bbag\b/ig,' '); }
+        const SIZE_LABELS = [[/\bextra\s+large\b/i,'XL'],[/\bmedium\b/i,'MED'],[/\bsmall\b/i,'SM'],[/\blarge\b/i,'LGE'],[/\bjumbo\b/i,'JBO'],[/\bxl\b/i,'XL'],[/\bstandard\b/i,'STD']];
+        SIZE_LABELS.forEach(([re, code]) => {
+          if(re.test(rest)){ if(!pendingLabel) pendingLabel = code; rest = rest.replace(re,' '); }
+        });
+        // known label brands go in the LABEL column, not the product name
+        ['Erendria','Sekoya','Peak','Naturipe'].forEach(lb => {
+          const re = new RegExp('\\b'+lb+'\\b','i');
+          if(re.test(rest)){ pendingLabel = lb; rest = rest.replace(re,' '); }
+        });
+        rest = rest.replace(/purchase|commodity|snipped/ig,' ');
+        // sanitize: keep only clean word tokens, cut everything after the size/pack code
+        const sizeLike = /(\d[\d.]*\s*(OZ|LB|LBS|CT|PT|PINT|KG|GN))|X\d|BULK|TAGS/i;
+        let toks = rest.replace(/\s+\.\s+/g,' ').split(/\s+/)
+          .filter(tk => /^[A-Za-z0-9&.\-]{2,}$/.test(tk) && /[A-Za-z0-9]/.test(tk));
+        const sizeIdx = toks.findIndex(tk => sizeLike.test(tk));
+        if(sizeIdx >= 0) toks = toks.slice(0, sizeIdx + 1);
+        // rebuild as "name . size"
+        if(toks.length > 1 && sizeIdx > 0){
+          pendingProduct = toks.slice(0, sizeIdx).join(' ') + ' . ' + toks[sizeIdx];
+        } else {
+          pendingProduct = toks.join(' ');
+        }
+        pendingProduct = pendingProduct.replace(/(\s*\.\s*)+$/,'').trim();
+        return;
+      }
+    }
+
+    const dateMatch = line.match(dateRegex);
+    if(dateMatch) lastRowDate = dateMatch[1];
+    // skip document header/footer lines — they are not product rows
+    if(/order\s*no|load\s*#|customer\s*ref|ship\s*date|print\s*date|delivery\s*date|depot|page\s*\d|shipping\s*detail|ship\s*to|bill\s*to|first\s*rec|pallet\s*(ref|qty)|line\s*qty|product\s*desc/i.test(line)){
+      return;
+    }
+    const tokens = line.split(/\s+/).map(t => t.trim()).filter(Boolean);
+    if(tokens.length < 3 && !poLot) return;
+
+    const row = {};
+    COLS.forEach(c => row[c] = '');
+    if(dateMatch) row.date = dateMatch[1];
+
+    if(poLot){
+      // pallet row on a Shipping Detail: one row = one pallet.
+      // Ignore case quantities — grouping below counts pallets.
+      row.po = poLot[1];
+      row.lot = poLot[2].toUpperCase();
+      if(!row.date && lastRowDate) row.date = lastRowDate;
+      row.qty = '1';
+      row.product = pendingProduct;
+      row.country = pendingCountry;
+      row.org = pendingOrg;
+      row.label = pendingLabel;
+      parsed.push(row);
+      return;
+    }
+
+    let productParts = [];
+    let productDone = false;
+    tokens.forEach(tok => {
+      const clean = tok.replace(/[|]/g,'').trim();
+      if(!clean || dateRegex.test(clean)) return;
+      if(/^\d{1,3}(,\d{3})+$/.test(clean)) return; // case totals like 1,330 — never row data
+      if(!productDone && clean === '.' && productParts.length){ productParts.push('.'); return; }
+      if(!productDone && /^[A-Za-z][A-Za-z.]*$/.test(clean)
+         && !COUNTRY_CODES.test(clean) && !/^OR$/i.test(clean)
+         && !LABEL_SET.test(clean) && !ORG_SET.test(clean)){
+        productParts.push(clean); return;
+      }
+      // size code: any mix of letters and digits while still reading the product
+      // (18OZX12, 1LBX10, DRYPINTX12, 25LBBULK, 9CTX10, 4.4OZX12, 2PINT...)
+      if(!productDone && /\d/.test(clean) && /[A-Za-z]/.test(clean)
+         && /^[A-Za-z0-9&.]{3,}$/.test(clean) && productParts.length){
+        productParts.push(clean); productDone = true; return;
+      }
+      productDone = true;
+      if(COUNTRY_CODES.test(clean) && !row.country){ row.country = clean.toUpperCase(); }
+      else if(LABEL_SET.test(clean) && !row.label){ row.label = clean.toUpperCase(); }
+      else if(ORG_SET.test(clean) && !row.org){ row.org = clean.toUpperCase(); }
+      else if(/^\d{5}$/.test(clean) && !row.po){ row.po = clean; }
+      else if(/^OR$/i.test(clean) && row.po && !row.coo){ row.coo = 'OR'; }
+      else if(/^[A-Z]{2,4}$/.test(clean) && !row.org){ row.org = clean; }
+      else if(/^(?=[A-Z0-9&]*\d)(?=[A-Z0-9&]*[A-Z&])[A-Z0-9&]{5,8}$/i.test(clean) && !row.lot){ row.lot = clean.toUpperCase(); }
+      else if(/^\d{6,7}$/.test(clean) && !row.lot && row.po){ row.lot = clean; }
+      else if(/^\d{1,2}$/.test(clean) && !row.qty){ row.qty = clean; }
+    });
+    row.product = productParts.join(' ').replace(/\s\./g,' .');
+    if((row.product || poLot) && (row.po || row.lot)) parsed.push(row);
+  });
+
+  // drop junk rows the reader hallucinated: a real row has BOTH a PO and a lot,
+  // or a product that plausibly looks like produce (size code or known commodity)
+  const plausible = parsed.filter(r => {
+    if(r.po && r.lot) return true;
+    if(!r.product) return false;
+    return /\d+\s*(OZ|LB|LBS|CT|PT|PINT|KG|GN)/i.test(r.product) || /BULK/i.test(r.product) ||
+      COMMODITIES.some(([name, aliases]) =>
+        new RegExp('\\b(' + [name.split(' ')[0], ...aliases].join('|') + ')\\b','i').test(r.product));
+  });
+
+  lastRejectedCount = parsed.length - plausible.length;
+
+  // Shipping Detail grouping: same product + PO/lot repeated = pallet count.
+  // (The same PO/lot pair can appear under different products — keep separate.)
+  const grouped = [];
+  plausible.forEach(r => {
+    const match = grouped.find(g => g.po && g.po === r.po && g.lot === r.lot && g.product === r.product && (g.label||'') === (r.label||''));
+    if(match){
+      match.qty = String((parseInt(match.qty)||1) + 1);
+    } else {
+      if(!r.qty) r.qty = '1';
+      grouped.push(r);
+    }
+  });
+  return grouped;
+}
+
+// Clean the photo before on-device reading: bigger, grayscale, contrast-stretched.
+// This is what makes crumpled warehouse papers readable to basic OCR.
+function preprocessForOcr(img){
+  try{
+    const maxEdge = 2200;
+    const scale = Math.min(2, maxEdge / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+    const data = ctx.getImageData(0, 0, w, h);
+    const px = data.data;
+    // grayscale + find 5th/95th percentile for contrast stretch
+    const grays = new Uint8Array(px.length/4);
+    for(let i=0;i<px.length;i+=4){
+      grays[i/4] = (px[i]*0.299 + px[i+1]*0.587 + px[i+2]*0.114) | 0;
+    }
+    const hist = new Array(256).fill(0);
+    grays.forEach(g => hist[g]++);
+    let lo=0, hi=255, acc=0;
+    const total = grays.length;
+    for(let i=0;i<256;i++){ acc+=hist[i]; if(acc>total*0.05){ lo=i; break; } }
+    acc=0;
+    for(let i=255;i>=0;i--){ acc+=hist[i]; if(acc>total*0.05){ hi=i; break; } }
+    const range = Math.max(1, hi-lo);
+    for(let i=0;i<px.length;i+=4){
+      let v = ((grays[i/4]-lo)*255/range) | 0;
+      v = v<0?0:(v>255?255:v);
+      px[i]=px[i+1]=px[i+2]=v;
+    }
+    ctx.putImageData(data, 0, 0);
+    return canvas.toDataURL('image/jpeg', 0.9);
+  } catch(e){
+    console.warn('preprocess failed, using original:', e);
+    return null;
+  }
+}
+
+async function runOnDeviceOcr(compressed, target){
+  if(scannerStatus.device === false){
+    throw new Error('device reader known blocked here');
+  }
+  statusText.textContent = 'AI unavailable — reading photo on this device instead (first time takes a moment)...';
+  await loadTesseract();
+  const ocrSource = (compressed.img && preprocessForOcr(compressed.img)) || compressed.dataUrl;
+  const result = await window.Tesseract.recognize(ocrSource, 'eng', {
+    logger: m => {
+      if(m.status === 'recognizing text'){
+        statusText.textContent = `Reading photo on device... ${Math.round(m.progress*100)}%`;
+      }
+    }
+  });
+  const text = result.data.text || '';
+  rawText.textContent = text || '(nothing detected)';
+  rawToggle.classList.add('active');
+  rawToggle.onclick = () => {
+    rawText.style.display = rawText.style.display === 'block' ? 'none' : 'block';
+  };
+  // pick up transfer header if visible
+  const orderNo = text.match(/Order[^0-9]{0,12}(\d{7})/i) || text.match(/\b(11\d{5})\b/);
+  if(orderNo && !target.number) target.number = orderNo[1];
+  const recDate = findReceivedDate(text);
+  if(recDate){ target.date = recDate; } // handwritten arrival date wins
+  else {
+    const printed = text.match(/date\s*:?\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i);
+    if(printed && (!target.date || target.date === todayStr())) target.date = printed[1];
+  }
+  const prepared = parseOcrText(text).map(r => {
+    const row = newRow();
+    COLS.forEach(c => { if(r[c]) row[c] = String(r[c]); });
+    row.product = normalizeProduct(row.product);
+    if(!row.date) row.date = target.date;
+    return row;
+  });
+  return mergeScannedRows(prepared);
+}
+
+const AI_PROMPT = `This is a photo of a produce warehouse document. It is one of two types:
+
+TYPE 1 — "Shipping Detail" paper (most common). Layout:
+- Top right: "Date:" (the transfer date) and an "Order No." box with a 7-digit number like 1119876 (this is the transfer number).
+- One or MORE product section headers like "Purchase Commodity FRBE . 1LBX10 . . Snipped Mexico" or "Alpine BRUS . 1LBSX18 . . Bag Mexico". From these: the product name/size (e.g. "BRUS . 1LBSX18"), the country (Mexico = MX), brand word → org code (Alpine → ALP, Hippie/HIP → HIP), and descriptor → label ("Bag" → BAG, "Medium"/"Snipped" → ignore).
+- Under each section, pallet rows: Pallet Ref (7-digit, IGNORE), then "PO / Lot" like "92304 / AX0007" or "92000 / 9206952" — the 5-digit number BEFORE the slash is the PO#, the code AFTER the slash is the LOT — 6-7 characters, letters can be anywhere in it (AX0007, BM0033, SAEX086, 9206952) — then First Rec Date and quantities.
+- IMPORTANT: group pallet rows WITHIN EACH PRODUCT SECTION by PO/Lot pair. Output ONE row per product+PO/Lot combination, qty = HOW MANY PALLET ROWS in that section have that pair (count rows, never sum case quantities). The same PO/Lot can appear under different products — keep those as separate output rows. Example: section "BRUS . 1LBX16" with 7 pallet rows of 92211/AX0006 and 4 of 92304/AX0007 → two rows, qty 7 and qty 4.
+- Handwritten ink notes like circled pallet counts or tick marks confirm pallet counts; handwritten totals like "18 pallets" are the whole-page total, not a row.
+
+TYPE 2 — a restack spreadsheet or handwritten list with columns: product, country, label, org, PO#, COO, lot, qty, date. Extract rows as shown.
+
+Output fields per row:
+- product: the REAL produce name plus the size code. Papers often use codes — translate them: FRBE = French Beans, BRUS = Brussels Sprouts, ASPA = Asparagus, and similar abbreviations for Blueberries, Raspberries, Blackberries, Celery, Mangoes, Cut Mango, Jackfruit, Strawberries, etc. Example: "Alpine BRUS . 1LBSX18" → product "Brussels Sprouts . 1LBSX18". Keep the size code exactly as printed. ANY commodity and ANY size can appear.
+- country: 2-letter code (Mexico→MX, Peru→PE, USA→US, Chile→CL, Guatemala→GT, Ecuador→EC, Argentina→AR, Costa Rica→CR, etc.)
+- label: BAG or STD if shown, else ""
+- org: HIP, ALP, PC, SB, TJ if shown, else ""
+- po: the 5-digit purchase order number, any value 00000-99999 (before the slash on Shipping Detail)
+- coo: "OR" if shown, else ""
+- lot: the code after the slash — 6-7 characters total, digits and letters mixed with letters possibly ANYWHERE in it (BM0033, PF0052, SAEX086, TFX0153, A&R0131, AX0007, 9206916). Copy it exactly, keep leading zeros.
+- qty: pallet count as described above
+- date: the transfer date from the top of the page, M/D/YYYY
+
+Also extract the transfer header: the Order No. (7-digit like 1119876) and the transfer date. For transferDate, PREFER a HANDWRITTEN received note if one is visible anywhere (often circled pen writing like "Received Coldfresh 7/15/26" or "Received 07/13/26") — that handwritten date is the truck arrival day and beats the printed date. If no handwritten date, use the printed Date at top. Format M/D/YYYY.
+
+Respond with ONLY this JSON, no markdown fences, no other text:
+{"transferDate":"" ,"transferNumber":"", "rows":[{"product":"","country":"","label":"","org":"","po":"","coo":"","lot":"","qty":"","date":""}]}
+
+Use empty strings for anything not visible. If you truly cannot read any line items, return {"transferDate":"","transferNumber":"","rows":[]}.`;
+
+function showScanProblem(msg){
+  const banner = document.getElementById('errorBanner');
+  const txt = document.getElementById('errorBannerText');
+  if(banner && txt){
+    txt.textContent = msg + ' Tip: lay the paper flat on the desk, stand directly above it, good light.';
+    banner.style.display = 'block';
+  }
+  // auto-open the raw text so you can see what the reader saw
+  const rt = document.getElementById('rawText');
+  if(rt && rt.textContent) rt.style.display = 'block';
+}
+
+async function runOcr(file){
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+  statusBox.classList.add('active');
+  statusText.textContent = 'Preparing photo...';
+  progressBar.removeAttribute('value'); // indeterminate
+
+  // Each photo = its own transfer. Reuse the last transfer only if it's
+  // completely untouched (no number, no photos, no typed rows); otherwise
+  // create a fresh one for this paper.
+  function transferIsBlank(t){
+    if(!t) return false;
+    if(t.number || (t.photos && t.photos.length)) return false;
+    return t.rows.every(r => COLS.every(c => c === 'date' ? true : !r[c]));
+  }
+  let target;
+  if(scanTargetIdx !== null && transfers[scanTargetIdx]){
+    // user asked to scan another page into a specific transfer
+    target = transfers[scanTargetIdx];
+    scanTargetIdx = null;
+  } else {
+    const last = transfers[transfers.length - 1];
+    if(transferIsBlank(last)){
+      target = last;
+    } else {
+      target = newTransfer();
+      transfers.push(target);
+    }
+  }
+
+  // shrink to a standard JPEG so huge iPhone photos and HEIC both work
+  let compressed;
+  try{
+    compressed = await compressImage(file);
+    const stamp = new Date();
+    const name = `transfer-${target.number || (transfers.length)}-photo-${target.photos.length+1}-${stamp.getMonth()+1}-${stamp.getDate()}.jpg`;
+    target.photos.push({ name, dataUrl: compressed.dataUrl });
+  } catch(e){
+    console.error('Could not attach photo:', e);
+    statusText.textContent = 'Could not read this photo file at all. Try a different picture.';
+    progressBar.value = 1;
+    render();
+    return;
+  }
+
+  try{
+    if(scannerStatus.ai === false){
+      throw new Error('AI reader known blocked here');
+    }
+    statusText.textContent = 'Reading photo with AI...';
+
+    // fit the send-copy into a strict payload budget, keep the attached
+    // photo at higher quality for viewing
+    let sendDataUrl = fitToBudget(compressed, 200000);
+
+    let data = null;
+    let lastErr = null;
+    const attempts = [sendDataUrl];
+    // prepare a second, much smaller attempt in case the first payload is rejected
+    if(compressed.img){
+      try{ attempts.push(drawToJpeg(compressed.img, 800, 0.5)); } catch(e){}
+    }
+
+    for(let i = 0; i < attempts.length; i++){
+      try{
+        if(i > 0) statusText.textContent = 'Retrying with a smaller photo...';
+        const sendUrl = attempts[i];
+        const sendType = (sendUrl.match(/^data:(image\/[a-z+.-]+)/i) || [,'image/jpeg'])[1];
+        const response = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-6",
+            max_tokens: 1000,
+            messages: [{
+              role: "user",
+              content: [
+                { type: "image", source: { type: "base64", media_type: sendType, data: sendUrl.split(',')[1] } },
+                { type: "text", text: AI_PROMPT }
+              ]
+            }]
+          })
+        });
+        if(!response.ok){
+          throw new Error('AI request failed (' + response.status + ')');
+        }
+        try{
+          data = await response.json();
+        } catch(e){
+          throw new Error('AI reply could not be read');
+        }
+        lastErr = null;
+        break;
+      } catch(err){
+        lastErr = err;
+        console.error('AI attempt ' + (i+1) + ' failed:', err);
+      }
+    }
+    if(lastErr) throw lastErr;
+
+    const text = (data.content || [])
+      .filter(b => b.type === 'text')
+      .map(b => b.text)
+      .join('\n');
+
+    rawText.textContent = text || '(nothing returned)';
+    rawToggle.classList.add('active');
+    rawToggle.onclick = () => {
+      rawText.style.display = rawText.style.display === 'block' ? 'none' : 'block';
+    };
+
+    let parsed = null;
+    try{
+      // tolerate fences or stray text around the JSON — grab the outermost {...}
+      const cleaned = text.replace(/```json|```/g,'').trim();
+      const start = cleaned.indexOf('{');
+      const end = cleaned.lastIndexOf('}');
+      parsed = JSON.parse(start >= 0 && end > start ? cleaned.slice(start, end+1) : cleaned);
+    } catch(e){
+      throw new Error('Could not understand AI response');
+    }
+
+    // fill transfer header if the photo had one and ours is empty
+    if(parsed.transferNumber && !target.number) target.number = String(parsed.transferNumber);
+    if(parsed.transferDate && (!target.date || target.date === todayStr())) target.date = String(parsed.transferDate);
+
+    const parsedRows = (parsed.rows || []).filter(r => r && (r.product || r.po || r.lot));
+    if(parsedRows.length){
+      // remove untouched starter rows before adding real data
+      target.rows = target.rows.filter(r => COLS.some(c => c !== 'date' && r[c]));
+      const prepared = parsedRows.map(r => {
+        const row = newRow();
+        COLS.forEach(c => { if(r[c] != null) row[c] = String(r[c]); });
+        row.product = normalizeProduct(row.product);
+        if(!row.date) row.date = target.date;
+        return row;
+      });
+      mergeScannedRows(prepared).forEach(row => target.rows.push(row));
+      target.rows = mergeScannedRows(target.rows);
+      statusText.textContent = `Done — photo attached and ${parsedRows.length} draft row(s) added. Check them against the paper.`;
+    } else {
+      statusText.textContent = 'Done — photo attached, but no line items could be read from it.';
+      showScanProblem('The scan ran, but no readable product lines were found in this photo.');
+    }
+  } catch(err){
+    console.error('AI reading failed, trying on-device reader:', err);
+    try{
+      const fallbackRows = await runOnDeviceOcr(compressed, target);
+      if(fallbackRows.length){
+        target.rows = target.rows.filter(r => COLS.some(c => c !== 'date' && r[c]));
+        fallbackRows.forEach(r => target.rows.push(r));
+        target.rows = mergeScannedRows(target.rows);
+        statusText.textContent = `Done — photo attached and ${fallbackRows.length} draft row(s) added (read on this device, so double-check carefully against the paper).`;
+      } else {
+        statusText.textContent = 'Photo attached, but no line items could be read from it.';
+        const rejected = lastRejectedCount > 0 ? ` It found ${lastRejectedCount} unreadable line(s) and rejected them rather than guessing.` : '';
+        showScanProblem('The scan ran, but this photo was too hard to read.' + rejected);
+      }
+    } catch(fallbackErr){
+      console.error('On-device reader also failed:', fallbackErr);
+      statusText.textContent = 'Photo attached. Reading is not available inside this app preview — to scan photos, open this same file in your phone\'s browser (Safari or Chrome) instead: it works there with no app and no account. Or just type the rows in — everything else works right here.';
+    }
+  } finally {
+    progressBar.value = 1;
+    render();
+    // show the transfer this photo landed in
+    const idx = transfers.indexOf(target);
+    const block = document.querySelectorAll('.transfer-block')[idx];
+    if(block){
+      block.scrollIntoView({ behavior:'smooth', block:'center' });
+      block.classList.add('flash');
+      setTimeout(() => block.classList.remove('flash'), 1200);
+    }
+  }
+}
+
+document.getElementById('cameraInput').addEventListener('change', e => {
+  if(e.target.files[0]) runOcr(e.target.files[0]);
+  e.target.value = '';
+});
+document.getElementById('fileInput').addEventListener('change', e => {
+  if(e.target.files[0]) runOcr(e.target.files[0]);
+  e.target.value = '';
+});
+
+// ---------- SCANNER DIAGNOSTIC ----------
+// Tests both reading paths on THIS device and reports plainly.
+// Also remembers the result so scans go straight to the working path.
+let scannerStatus = { ai: null, device: null }; // null=untested, true/false=result
+
+async function testAiPath(){
+  try{
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        messages: [{ role: "user", content: "Reply with only the word: ok" }]
+      })
+    });
+    if(!response.ok) return { ok:false, detail:'status ' + response.status };
+    const data = await response.json();
+    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    return { ok: text.length > 0, detail: text.slice(0,40) };
+  } catch(e){
+    return { ok:false, detail: e.message };
+  }
+}
+
+async function testDevicePath(){
+  try{
+    await loadTesseract();
+    return { ok: !!window.Tesseract, detail:'reader loaded' };
+  } catch(e){
+    return { ok:false, detail: e.message };
+  }
+}
+
+document.getElementById('testBtn').addEventListener('click', async () => {
+  const box = document.getElementById('testResult');
+  box.style.display = 'block';
+  box.textContent = 'Testing both readers on this device...';
+
+  const [ai, device] = await Promise.all([
+    withTimeout(testAiPath(), 20000, 'AI test').catch(e => ({ok:false, detail:e.message})),
+    withTimeout(testDevicePath(), 35000, 'device reader test').catch(e => ({ok:false, detail:e.message}))
+  ]);
+  scannerStatus.ai = ai.ok;
+  scannerStatus.device = device.ok;
+
+  const lines = [];
+  lines.push((ai.ok ? '✅' : '❌') + ' AI reader: ' + (ai.ok ? 'working — scans will be high quality.' : 'blocked here (' + ai.detail + ').'));
+  lines.push((device.ok ? '✅' : '❌') + ' On-device reader: ' + (device.ok ? 'working — no API or account needed.' : 'blocked here (' + device.detail + ').'));
+  if(!ai.ok && !device.ok){
+    lines.push('⚠️ Neither reader can run in this environment. Open this same file in Safari or Chrome (not inside the Claude app) and scanning will work. Typing rows and Excel export still work fine right here.');
+  } else {
+    lines.push('👍 Scanning will use the ' + (ai.ok ? 'AI reader' : 'on-device reader') + ' on this device. Take a photo to try it.');
+  }
+  box.innerHTML = lines.map(l => '<div>' + l + '</div>').join('');
+});
+
+// ---------- MASTER SHEET ----------
+async function loadMasterFromFile(file, viaHandle){
+  try{
+    const buf = await file.arrayBuffer();
+    // real .xlsx files are zip archives and start with "PK"
+    const sig = new Uint8Array(buf.slice(0,2));
+    if(sig[0] !== 0x50 || sig[1] !== 0x4B){
+      throw new Error('not a valid xlsx');
+    }
+    const wb = XLSX.read(buf, {type:'array'});
+    if(!wb.SheetNames.length || !wb.Sheets[wb.SheetNames[0]]['!ref']){
+      throw new Error('workbook has no readable sheet');
+    }
+    masterWB = wb;
+    masterName = file.name.replace(/\.(xlsx|xls)$/i,'');
+    document.getElementById('masterStatus').textContent = viaHandle
+      ? `Loaded "${file.name}" — one-click mode ON: "Add Week" will save the new section STRAIGHT INTO this file. ✓`
+      : `Loaded "${file.name}" — this week's section will be added to the bottom of "${masterWB.SheetNames[0]}" when you export. Your original file stays untouched; a new copy downloads.`;
+    return true;
+  } catch(err){
+    masterWB = null;
+    masterHandle = null;
+    masterName = '';
+    alert('Could not read that file. Make sure it is a real .xlsx Excel file.');
+    console.error(err);
+    return false;
+  }
+}
+
+document.getElementById('masterInput').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if(!file) return;
+  masterHandle = null; // classic path: download a copy
+  await loadMasterFromFile(file, false);
+  e.target.value = '';
+});
+
+// one-click direct update (desktop Chrome/Edge)
+const directBtn = document.getElementById('openMasterDirectBtn');
+if('showOpenFilePicker' in window){
+  directBtn.style.display = '';
+  directBtn.addEventListener('click', async () => {
+    try{
+      const [handle] = await window.showOpenFilePicker({
+        types: [{ description: 'Excel', accept: {'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']} }]
+      });
+      const file = await handle.getFile();
+      if(await loadMasterFromFile(file, true)){
+        masterHandle = handle;
+      }
+    } catch(err){
+      if(err && err.name !== 'AbortError') console.error(err);
+    }
+  });
+}
+
+function weekLabel(){
+  const s = document.getElementById('weekStart').value;
+  const en = document.getElementById('weekEnd').value;
+  const fmt = v => {
+    if(!v) return '';
+    const [y,m,d] = v.split('-');
+    return `${m}-${d}-${y}`;
+  };
+  if(s && en) return `${fmt(s)} - ${fmt(en)}`;
+  if(s) return `Week of ${fmt(s)}`;
+  return `Week exported ${todayStr()}`;
+}
+
+function buildWeekRows(includeHeader){
+  const out = [];
+  if(includeHeader){
+    out.push(['PRODUCT','Country of','LABEL','ORG','PO#','COO.','LOT','QTY X Lot', weekLabel()]);
+  }
+  transfers.forEach(t => {
+    out.push([]);
+    out.push(['', t.date]);
+    out.push(['', t.number]);
+    out.push([]);
+    t.rows.forEach(r => {
+      out.push(COLS.map(c => r[c] || ''));
+    });
+    const total = t.rows.reduce((s,r) => s + (parseFloat(r.qty)||0), 0);
+    if(total) out.push(['','','','','','','', total]);
+  });
+  return out;
+}
+
+function validate(){
+  if(!transfers.length){
+    alert('Add at least one transfer first.');
+    return false;
+  }
+  const hasRows = transfers.some(t => t.rows.length);
+  if(!hasRows){
+    alert('Add at least one row to a transfer.');
+    return false;
+  }
+  return true;
+}
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  if(!validate()) return;
+  const weekRows = buildWeekRows(!masterWB);
+  let wb, ws, sheetName;
+
+  if(masterWB){
+    wb = masterWB;
+    sheetName = wb.SheetNames[0];
+    ws = wb.Sheets[sheetName];
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+    const startRow = range.e.r + 2; // leave one blank row
+    XLSX.utils.sheet_add_aoa(ws, weekRows, {origin: {r:startRow, c:0}});
+  } else {
+    wb = XLSX.utils.book_new();
+    ws = XLSX.utils.aoa_to_sheet(weekRows);
+    sheetName = 'RESTACK BY TRANSFER';
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  }
+
+  const base = masterName || 'RESTACK-BY-TRANSFER';
+  const stamp = new Date().toISOString().slice(0,10);
+  if(masterHandle){
+    (async () => {
+      try{
+        const data = XLSX.write(wb, {type:'array', bookType:'xlsx'});
+        const writable = await masterHandle.createWritable();
+        await writable.write(data);
+        await writable.close();
+        document.getElementById('masterStatus').textContent =
+          `✓ Big sheet updated — the new week was saved straight into "${masterName}.xlsx" at ${new Date().toLocaleTimeString()}.`;
+      } catch(err){
+        console.error('direct save failed, downloading a copy instead:', err);
+        XLSX.writeFile(wb, `${base}-updated-${stamp}.xlsx`);
+      }
+    })();
+  } else {
+    XLSX.writeFile(wb, `${base}-updated-${stamp}.xlsx`);
+  }
+});
+
+function buildTsv(){
+  // tab-separated = pastes into Excel with every value in its own cell
+  return buildWeekRows(true).map(r => (r || []).join('\t')).join('\n');
+}
+async function copyText(text){
+  try{
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch(e){
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try{ ok = document.execCommand('copy'); } catch(e2){}
+    ta.remove();
+    return ok;
+  }
+}
+document.getElementById('copyTsvBtn').addEventListener('click', async () => {
+  if(!validate()) return;
+  const ok = await copyText(buildTsv());
+  document.getElementById('masterStatus').textContent = ok
+    ? '✓ Copied! Paste into Excel (Ctrl+V / Cmd+V) and every value lands in its own cell — or paste into a Gmail draft.'
+    : 'Could not copy automatically — press and hold in the box below to copy by hand.';
+  if(!ok){
+    const rt = document.getElementById('rawText');
+    rt.textContent = buildTsv();
+    rt.style.display = 'block';
+  }
+});
+document.getElementById('emailBtn').addEventListener('click', () => {
+  if(!validate()) return;
+  const subject = encodeURIComponent('Restack Report — ' + weekLabel());
+  const tsv = buildTsv();
+  if(tsv.length > 1500){
+    // long reports get mangled in email links — clipboard is the reliable route
+    copyText(tsv).then(() => {
+      alert('This week is too big for an email link, so I copied it to your clipboard instead.\n\nOpen Gmail → new email → paste. Or better: use "Add Week & Download" and attach the Excel file.');
+    });
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = 'mailto:?subject=' + subject + '&body=' + encodeURIComponent(tsv);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+});
+
+document.getElementById('shareXlsxBtn').addEventListener('click', async () => {
+  if(!validate()) return;
+  const weekRows = buildWeekRows(true);
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(weekRows);
+  XLSX.utils.book_append_sheet(wb, ws, 'This Week');
+  const buf = XLSX.write(wb, {type:'array', bookType:'xlsx'});
+  const stamp = new Date().toISOString().slice(0,10);
+  const file = new File([buf], `restack-week-${stamp}.xlsx`,
+    {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{
+      await navigator.share({ files:[file], title: 'Restack Report', text: 'Restack Report — ' + weekLabel() });
+      document.getElementById('masterStatus').textContent = tr('✓ Shared — the Excel file went out attached.');
+    } catch(err){
+      if(err && err.name !== 'AbortError') console.error(err);
+    }
+  } else {
+    XLSX.writeFile(wb, `restack-week-${stamp}.xlsx`);
+    document.getElementById('masterStatus').textContent = tr('Sharing is not available in this browser — the Excel file downloaded instead. Attach it to your email.');
+  }
+});
+
+document.getElementById('exportNewBtn').addEventListener('click', () => {
+  if(!validate()) return;
+  const weekRows = buildWeekRows(true);
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(weekRows);
+  XLSX.utils.book_append_sheet(wb, ws, 'This Week');
+  const stamp = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `restack-week-${stamp}.xlsx`);
+});
+
+document.getElementById('savePhotosBtn').addEventListener('click', () => {
+  const all = transfers.flatMap(t => t.photos || []);
+  if(!all.length){
+    alert('No photos attached yet — take or upload a photo first.');
+    return;
+  }
+  all.forEach((p, i) => setTimeout(() => downloadPhoto(p), i * 300));
+});
+
+function blockBefore(a, b){
+  return !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+}
+function parseAnyDate(str){
+  if(!str) return null;
+  const m = String(str).match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if(!m) return null;
+  let y = parseInt(m[3]); if(y < 100) y += 2000;
+  return new Date(y, parseInt(m[1])-1, parseInt(m[2])).getTime();
+}
+document.getElementById('sortBtn').addEventListener('click', () => {
+  transfers.sort((a,b) => {
+    const da = parseAnyDate(a.date), db = parseAnyDate(b.date);
+    if(da === null && db === null) return 0;
+    if(da === null) return 1;
+    if(db === null) return -1;
+    return da - db;
+  });
+  render();
+});
+
+// ---------- SAVE / OPEN WORK (move between phone and computer) ----------
+const _cryp = (window.crypto && window.crypto.subtle) ? window.crypto : null;
+async function deriveKey(password, salt){
+  const enc = new TextEncoder();
+  const base = await _cryp.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return _cryp.subtle.deriveKey(
+    {name:'PBKDF2', salt, iterations:100000, hash:'SHA-256'},
+    base, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']);
+}
+const b64 = a => btoa(String.fromCharCode(...new Uint8Array(a)));
+const unb64 = s2 => Uint8Array.from(atob(s2), c => c.charCodeAt(0));
+
+document.getElementById('saveWorkBtn').addEventListener('click', async () => {
+  const payload = JSON.stringify({ transfers, weekStart: document.getElementById('weekStart').value, weekEnd: document.getElementById('weekEnd').value });
+  let out;
+  const pw = _cryp ? (prompt(tr('Set a password for this file (leave blank for no password):')) ?? null) : '';
+  if(pw === null) return; // cancelled
+  if(pw && _cryp){
+    const salt = _cryp.getRandomValues(new Uint8Array(16));
+    const iv = _cryp.getRandomValues(new Uint8Array(12));
+    const key = await deriveKey(pw, salt);
+    const ct = await _cryp.subtle.encrypt({name:'AES-GCM', iv}, key, new TextEncoder().encode(payload));
+    out = JSON.stringify({v:1, enc:true, salt:b64(salt), iv:b64(iv), data:b64(ct)});
+  } else {
+    out = JSON.stringify({v:1, enc:false, data: payload});
+  }
+  const blob = new Blob([out], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const stamp = new Date().toISOString().slice(0,10);
+  a.download = `restack-work-${stamp}.restack`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  document.getElementById('masterStatus').textContent = tr('✓ Work saved. Send this file to your other device (AirDrop, email, USB), then use 📂 Open Work there.');
+});
+
+document.getElementById('openWorkInput').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if(!file) return;
+  try{
+    const box = JSON.parse(await file.text());
+    let payload;
+    if(box.enc){
+      if(!_cryp) throw new Error('This browser cannot open password-protected files.');
+      const pw = prompt(tr('This file is password-protected. Enter the password:'));
+      if(pw === null) return;
+      const key = await deriveKey(pw, unb64(box.salt));
+      try{
+        const pt = await _cryp.subtle.decrypt({name:'AES-GCM', iv: unb64(box.iv)}, key, unb64(box.data));
+        payload = new TextDecoder().decode(pt);
+      } catch(err){
+        alert(tr('Wrong password.'));
+        return;
+      }
+    } else {
+      payload = box.data;
+    }
+    const saved = JSON.parse(payload);
+    if(!Array.isArray(saved.transfers)) throw new Error('bad file');
+    transfers = saved.transfers;
+    document.getElementById('weekStart').value = saved.weekStart || '';
+    document.getElementById('weekEnd').value = saved.weekEnd || '';
+    render();
+    document.getElementById('masterStatus').textContent = tr('✓ Work loaded — all transfers, rows, and photos are here.');
+    window.scrollTo({top:0, behavior:'smooth'});
+  } catch(err){
+    alert(tr('Could not open that file — it does not look like a saved work file.'));
+    console.error(err);
+  }
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if(!confirm(tr('Are you sure you want to reset the page? This deletes ALL transfers, rows, and photos you have entered. This cannot be undone.'))) return;
+  transfers = [];
+  scanTargetIdx = null;
+  masterWB = null;
+  masterHandle = null;
+  masterName = '';
+  const t = newTransfer();
+  t.rows.push(newRow({date: t.date}));
+  transfers.push(t);
+  document.getElementById('weekStart').value = '';
+  document.getElementById('weekEnd').value = '';
+  document.getElementById('masterStatus').textContent =
+    'No big sheet loaded — "Add Week & Download" will create a fresh file. To append to your existing RESTACK BY TRANSFER sheet, open it first, then export.';
+  const rt = document.getElementById('rawText');
+  if(rt){ rt.textContent = ''; rt.style.display = 'none'; }
+  const banner = document.getElementById('errorBanner');
+  if(banner) banner.style.display = 'none';
+  statusText.textContent = '';
+  progressBar.value = 0;
+  render();
+  window.scrollTo({top: 0, behavior: 'smooth'});
+});
+
+// surface unexpected errors visibly instead of failing silently
+document.getElementById('errorBannerClose').addEventListener('click', () => {
+  document.getElementById('errorBanner').style.display = 'none';
+});
+window.addEventListener('error', e => {
+  const banner = document.getElementById('errorBanner');
+  const txt = document.getElementById('errorBannerText');
+  if(banner && txt){
+    txt.textContent = 'Something went wrong: ' + (e.message || 'unknown error') + ' — screenshot this and send it to get it fixed.';
+    banner.style.display = 'block';
+  }
+});
+
+document.getElementById('langEn').addEventListener('click', () => { lang='en'; applyLang(); });
+document.getElementById('langEs').addEventListener('click', () => { lang='es'; applyLang(); });
+
+// start with one empty transfer
+transfers.push(newTransfer());
+transfers[0].rows.push(newRow());
+render();
+</script>
+
+</body>
+</html>
